@@ -1,45 +1,54 @@
+import dateutil.parser
 from pymongo import MongoClient
+from decouple import config
+
+MONGO_USERNAME = config('MONGO_INITDB_ROOT_USERNAME')
+MONGO_PASSWORD = config('MONGO_INITDB_ROOT_PASSWORD')
+MONGO_DATABASE = config('MONGO_INITDB_DATABASE')
+
+MONGODB_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@mongodb:27017/{MONGO_DATABASE}"
+
+client = MongoClient(MONGODB_URI)
+db = client[MONGO_DATABASE]
 
 
 def aggregate_salaries(dt_from, dt_upto, group_type):
-    client = MongoClient("localhost", 27017)
-    db = client["mydatabase"]
-    collection = db["salaries"]
+    dt_from = dateutil.parser.parse(dt_from)
+    dt_upto = dateutil.parser.parse(dt_upto)
 
-    group_fields = {
-        "hour": {"format": "%Y-%m-%dT%H:00:00", "id": {"year": {"$year": "$date"}, "month": {"$month": "date"}, "day": {"dayOfMonth": "$date"}, "hour": {"$hour": "$date"}}},
-        "day": {"format": "%Y-%m-%dT00:00:00", "id": {"year": {"$year": "$date"}, "month": {"$month": "$date"}, "day": {"$dayOfMonth": "$date"}}},
-        "month": {"format": "%Y-%m-01T00:00:00", "id": {"year": {"$year": "$date"}, "month": {"$month": "$date"}}}
-    }
+    if group_type == "hour":
+        group_format = "%Y-%m-%dT%H:00:00"
+    elif group_type == "day":
+        group_format = "%Y-%m-%dT00:00:00"
+    elif group_type == "month":
+        group_format = "%Y-%m-01T00:00:00"
+    else:
+        raise ValueError("Invalid group_type")
 
     pipeline = [
         {
             "$match": {
-                "date": {
-                    "$gte": dt_from,
-                    "$lte": dt_upto
-                }
+                "dt": {"$gte": dt_from, "$lte": dt_upto}
             }
         },
         {
             "$group": {
-                "_id": group_fields[group_type]["id"],
-                "sum": {"$sum": "$amount"}
+                "_id": {
+                    "$dateToString": {"format": group_format, "date": "$dt"}
+                },
+                "total": {"$sum": "$value"}
             }
         },
-        {
-            "$project": {
-                "formatted_date": {"$dateToString": {"format": group_fields[group_type]["format"], "date": "$_id"}},
-                "sum": 1
-            }
-        },
-        {
-            "$sort": {"formatted_date": 1}
-        }
+        {"$sort": {"_id": 1}}
     ]
 
-    result = list(collection.aggregate(pipeline))
-    dataset = [item["sum"] for item in result]
-    labels = [item["formatted_date"] for item in result]
+    results = db["sample_collection"].aggregate(pipeline)
+
+    dataset = []
+    labels = []
+    for result in results:
+        dataset.append(result["total"])
+        labels.append(result["_id"])
 
     return {"dataset": dataset, "labels": labels}
+

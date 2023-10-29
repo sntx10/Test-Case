@@ -2,16 +2,24 @@ version: "3"
 
 services:
   bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
     container_name: telegram_bot
     restart: always
+    depends_on:
+      - mongodb
+    environment:
+      - API_TOKEN=${API_TOKEN}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+
   mongodb:
-    image: mongo:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.mongo
     container_name: mongodb
     ports:
       - "27118:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
 
